@@ -1,4 +1,29 @@
 /*Actualización 05/02/2026 para el uso de github :D*/
+/*Segunda actualizacion implementacion de caracteristicas de debugger
+la idea es usar las siguientes caraceristicas
+
+(F1) Culling (Recorte de caras traseras)
+	- Teoricamente es esto: 
+		¿'para que dibujar la espalda del cubo si no la estamos viendo'?
+		GL_CULL_FACE le dice a OpenGL: "si un triangulo apunta hacia atrás, ignoralo"
+		Esto es vital para ahorrar memoria
+
+		-- el efecto visual: si nos metemos dentro del cubo, este desaparecerá. porque estarás viendo las 
+		   caras "por detras".
+(F2) Depth Test (prueba de profundidad): 
+	- Teoria: Es el Z-Buffer. Decide qué pixel está delante de cuál.
+	- El efecto visual: si lo apagamos, veremos el caos. El cubi se dibujará en el orden en que fue programado
+	  no en el orden de distancoa. Las Patas traseras podrían verse encima de las delanteras.
+
+(F3) Polygon Mode (Modo Alambre) : 
+	- Teoría: Le dice a la GPU: #no rellenes los triángulos con color, solo dibuja las lineas de los bordes#
+		-- El efecto es que nuestro cubo loco de colores solidos se notara poco, pero si tuvieramos
+		   un cubo multicolor en una sola cara, veriamos un degradado suave.
+(F4) Shading Model (suavizado):
+	-Teoria: GL_FLAT (un color por cara) vs GL_SMOOTH (mezcla los colores de los vértices)
+		-- efecto visual esperado: En nuestro cubo de colores sólidos se notará poco, pero si tuvieramos 
+		un cubo multicolor en una sola cara, veriamos un degradado suavecito. 
+*/
 #include <math.h>
 #include <stdio.h>
 #include"glut.h"
