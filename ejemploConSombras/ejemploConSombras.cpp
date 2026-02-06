@@ -1,0 +1,429 @@
+/*Actualización 05/02/2026 para el uso de github :D*/
+#include <math.h>
+#include <stdio.h>
+#include"glut.h"
+
+// ---------------- VARIABLES GLOBALES ---------------- //
+/*
+Explicaciones de las cariables globales
+las variables globales son "la memoria" del programa. 
+como openGL es una m+aquina de estados, necesitamos guardar cómo está el mundo entre cada parpadeo
+de la pantalla.
+	*camDist, camAngleX, camAngleY : son las coordenadas Esféricas. En lugar de guardar (x,y,z) de la cámara
+	guardamos "que tan lejos esta" (radio) y "hacia dónde gira" (angulos). Luego usamos trigonometria(sin,cos)
+	para calcular la (x,y,z) real
+
+	*lighpost[]: La posicion de la luz. El cuarto numero es vital #1.0f# 
+	 -- si fuera 0.0f, seria luz direccional como el sol
+	 -- si es 1.0f, es luz puntual "como de foquito", la cual permite deformación de perspectiva
+		de la sombra
+	*floorPlane: La matematica del piso
+		* La ecuacion Ax + Bx + Cz + D = 0
+		* el vector de este plano lo dejamos como {0,1,0,2}. Lo que se traduce como 0x + 1y + 0z + 2 =0
+		lo que resulta que y = -2 por lo cual el plano se encuentra a una altura de -2.
+
+*/
+
+// 1. Control de CÁMARA (Sistema Polar para efecto Drone)
+float camDist = 10.0f;  // Distancia inicial
+float camAngleX = 0.0f; // Rotación horizontal
+float camAngleY = 0.0f; // Rotación vertical
+int lastMouseX, lastMouseY; // Para rastrear el arrastre del mouse
+//bool isDragging = false;
+
+int interactionMode = 0; // 0 = Nada, 1 = Moviendo CÁMARA, 2 = Moviendo CUBO
+
+bool animacionActiva = false; // El interruptor inicia apagado
+
+// 2. Control de LUZ (El Foco)
+// Posición inicial: Arriba y a la izquierda
+float lightPos[4] = { -4.0f, 4.0f, 4.0f, 1.0f };
+
+// 3. Definición del PISO (Plano matemático)
+// Ecuación: 0x + 1y + 0z + 2 = 0  (Piso en Y = -2.0)
+GLfloat floorPlane[4] = { 0.0f, 1.0f, 0.0f, 2.0f };
+
+static GLfloat theta[] = { 0.0f, 0.0f, 0.0f }; // Ángulos de rotación del cubo
+
+// ---------------- GEOMETRÍA DEL CUBO (LEGACY) ---------------- //
+/*
+El esqueleto : LA construcción del Cubo (cara 0 a cara 6)
+Aqui ocurre algo magico, llamado Modelado Jerárquico. No dibujaremos un cubo de golpe; dibujaremos una cara
+y la clonamos moviendola :D
+*/
+void cara0() {
+	glShadeModel(GL_FLAT);
+	glBegin(GL_POLYGON);
+	glVertex3f(1., 1., 0);
+	glVertex3f(1., -1., 0);
+	glVertex3f(-1., -1., 0);
+	glVertex3f(-1., 1., 0);
+	glEnd();
+}
+
+/*
+aquí te describo el funcionamiento de cada cosita dentro del metodo cara1
+	- glPushMatrix(): guarda la posicion actual del mundo
+	- glTranslate(0,0,1): mueve el lápiz 1 metro hacia el frente.
+	- cara0(); Dibujara la cara base.
+	- glPopMatrix(): regresa el lápiz a donde estaba antes de moverlo
+	- Resultado: Dibuja la tapa frontal del cubo
+
+*/
+void cara1() {
+	glPushMatrix();
+	glTranslatef(0., 0., 1.);
+	cara0();
+	glPopMatrix();
+}
+/*
+desde aqui hasta la cara6() se repite el patron anterior, pero rotando 90 grados para colocar las tapas laterales
+arriba y abajo.
+
+ahora si queremos cambiar el tamaño del cubo solo modificariamos el tamaño de la cara base, es decir cara0
+*/
+void cara2() {
+	glPushMatrix();
+	glRotatef(90., 1., 0., 0.);
+	cara1();
+	glPopMatrix();
+}
+void cara3() {
+	glPushMatrix();
+	glRotatef(90., 1., 0., 0.);
+	cara2();
+	glPopMatrix();
+}
+void cara4() {
+	glPushMatrix();
+	glRotatef(90., 1., 0., 0.);
+	cara3();
+	glPopMatrix();
+}
+void cara5() {
+	glPushMatrix();
+	glRotatef(90., 0., 1., 0.);
+	cara1();
+	glPopMatrix();
+}
+void cara6() {
+	glPushMatrix();
+	glRotatef(-90., 0., 1., 0.);
+	cara1();
+	glPopMatrix();
+}
+
+// Cubo CON color (Para el objeto real)
+void colorcube(void) {
+	glColor3f(0.5, 0., 0.); cara1();
+	glColor3f(0., 0.5, 0.); cara2();
+	glColor3f(0., 0., 0.5); cara3();
+	glColor3f(0., 0.5, 0.5); cara4();
+	glColor3f(0.5, 0.5, 0.); cara5();
+	glColor3f(0.5, 0., 0.5); cara6();
+}
+
+// Cubo SIN color (Para la sombra negra)
+void colorcube_sin_color(void) {
+	cara1();
+	cara2();
+	cara3();
+	cara4();
+	cara5();
+	cara6();
+}
+
+// ---------------- FUNCIONES AUXILIARES ---------------- //
+
+// Dibuja el piso gris y una rejilla para referencia
+void DibujarPiso() {
+	// Superficie sólida
+	glColor3f(0.6f, 0.6f, 0.6f);
+	glBegin(GL_QUADS);
+	glNormal3f(0.0f, 1.0f, 0.0f);
+	glVertex3f(-10.0f, -2.0f, -10.0f);
+	glVertex3f(-10.0f, -2.0f, 10.0f);
+	glVertex3f(10.0f, -2.0f, 10.0f);
+	glVertex3f(10.0f, -2.0f, -10.0f);
+	glEnd();
+}
+
+// Dibuja una esfera amarilla donde está la luz (para saber qué movemos)
+void DibujarFoco() {
+	glPushMatrix();
+	glTranslatef(lightPos[0], lightPos[1], lightPos[2]);
+	glColor3f(1.0f, 1.0f, 0.0f); // Amarillo
+	glutSolidSphere(0.2, 10, 10);
+	glPopMatrix();
+}
+
+// MATEMÁTICA DE SOMBRAS (Planar Shadow Matrix)
+// Fuente: Diapositiva 13 del curso
+/*
+Esta es la funcion más perrona de todas. Es algebra lineal pura "proyeccion planar"
+vPlaneEquation : Donde esta el piso jefesito
+vLightPos : Donde esta la luz bro
+1.- dot (producto punto) : vPlaneEquation * vLightPos
+	- calcula el ángulo y distancia entre la luz y el plano. Nos dice si la luz esta "viendo" al plano
+		de frente o de lado.
+2.- La matriz (destMat) : 
+	- Lo que hace esta matriz es crear una transformación que colapsa la dimensión "Y" (altura) basandose
+	  en la linea que contenga la luz con el vertice. 
+	  basicamente intercepta el rayo de luz con el plano
+
+Output: 
+	- Devuelve una matrix de 4x4 que, al multiplicarla por cualquier objeto 3D, lo aplasta contra el suelo
+	como si fuera una estampa.
+*/
+void gltMakeShadowMatrix(GLfloat vPlaneEquation[], GLfloat vLightPos[], GLfloat destMat[]) {
+	GLfloat dot;
+	dot = vPlaneEquation[0] * vLightPos[0] + vPlaneEquation[1] * vLightPos[1] +
+		vPlaneEquation[2] * vLightPos[2] + vPlaneEquation[3] * vLightPos[3];
+
+	destMat[0] = dot - vLightPos[0] * vPlaneEquation[0];
+	destMat[4] = 0.0f - vLightPos[0] * vPlaneEquation[1];
+	destMat[8] = 0.0f - vLightPos[0] * vPlaneEquation[2];
+	destMat[12] = 0.0f - vLightPos[0] * vPlaneEquation[3];
+
+	destMat[1] = 0.0f - vLightPos[1] * vPlaneEquation[0];
+	destMat[5] = dot - vLightPos[1] * vPlaneEquation[1];
+	destMat[9] = 0.0f - vLightPos[1] * vPlaneEquation[2];
+	destMat[13] = 0.0f - vLightPos[1] * vPlaneEquation[3];
+
+	destMat[2] = 0.0f - vLightPos[2] * vPlaneEquation[0];
+	destMat[6] = 0.0f - vLightPos[2] * vPlaneEquation[1];
+	destMat[10] = dot - vLightPos[2] * vPlaneEquation[2];
+	destMat[14] = 0.0f - vLightPos[2] * vPlaneEquation[3];
+
+	destMat[3] = 0.0f - vLightPos[3] * vPlaneEquation[0];
+	destMat[7] = 0.0f - vLightPos[3] * vPlaneEquation[1];
+	destMat[11] = 0.0f - vLightPos[3] * vPlaneEquation[2];
+	destMat[15] = dot - vLightPos[3] * vPlaneEquation[3];
+}
+
+// ---------------- CONTROL DE USUARIO (INPUTS) ---------------- //
+
+// Teclado Normal: W/S para Zoom
+void keyboard(unsigned char key, int x, int y) {
+	switch (key) {
+	case 'w': case 'W': // Zoom In
+		if (camDist > 3.0f) camDist -= 0.5f;
+		break;
+	case 's': case 'S': // Zoom Out
+		camDist += 0.5f;
+		break;
+	case 27: // ESC para salir
+		exit(0);
+		break;
+	}
+	glutPostRedisplay();
+}
+
+// Flechas: Mover la Luz
+void specialKeys(int key, int x, int y) {
+	float step = 0.5f;
+	switch (key) {
+	case GLUT_KEY_UP:    lightPos[2] -= step; break; // Z Atrás
+	case GLUT_KEY_DOWN:  lightPos[2] += step; break; // Z Adelante
+	case GLUT_KEY_LEFT:  lightPos[0] -= step; break; // X Izquierda
+	case GLUT_KEY_RIGHT: lightPos[0] += step; break; // X Derecha
+	}
+	glutPostRedisplay();
+}
+
+// Mouse: Click para empezar a arrastrar
+void mouseButton(int button, int state, int x, int y) {
+	// Guardamos la posición inicial siempre que se presiona un botón
+	if (state == GLUT_DOWN) {
+		lastMouseX = x;
+		lastMouseY = y;
+	}
+
+	// Lógica de selección de MODO
+	if (button == GLUT_LEFT_BUTTON) {
+		if (state == GLUT_DOWN) {
+			interactionMode = 1; // Modo 1: Mover Cámara (Drone)
+		}
+		else {
+			interactionMode = 0; // Soltar: Dejar de mover
+		}
+	}
+	else if (button == GLUT_RIGHT_BUTTON) {
+		if (state == GLUT_DOWN) {
+			interactionMode = 2; // Modo 2: Girar CUBO (Trackball)
+		}
+		else {
+			interactionMode = 0; // Soltar: Dejar de mover
+		}
+	}
+}
+
+void mouseMove(int x, int y) {
+	// Si no estamos haciendo nada, salimos
+	if (interactionMode == 0) return;
+
+	// Calcular cuánto se movió el mouse desde el último cuadro
+	int dx = x - lastMouseX;
+	int dy = y - lastMouseY;
+
+	// CASO 1: MOVEMOS LA CÁMARA (Clic Izquierdo)
+	if (interactionMode == 1) {
+		camAngleX += dx * 0.5f;
+		camAngleY += dy * 0.5f;
+
+		// Limites para que la cámara no de vueltas locas verticales
+		if (camAngleY > 89.0f) camAngleY = 89.0f;
+		if (camAngleY < -89.0f) camAngleY = -89.0f;
+	}
+
+	// CASO 2: GIRAMOS EL CUBO (Clic Derecho) -> ¡Lo que tú pediste!
+	if (interactionMode == 2) {
+		// Nota la matemática cruzada:
+		// Mover mouse en X (horizontal) -> Gira el cubo en eje Y (Vertical)
+		// Mover mouse en Y (vertical) -> Gira el cubo en eje X (Horizontal)
+		theta[1] += dx * 0.5f;
+		theta[0] += dy * 0.5f;
+	}
+
+	// Actualizamos la posición "anterior" para el siguiente cuadro
+	lastMouseX = x;
+	lastMouseY = y;
+
+	// ¡Obligatorio! Pedir a OpenGL que dibuje la escena con los nuevos datos
+	glutPostRedisplay();
+}
+
+// ---------------- RENDERIZADO PRINCIPAL ---------------- //
+/*
+Aqui es donde ocurre la magia del orden (Algoritmo del Pintor).
+Paso A: El lienzo glClear(...), esto borra lo que había en el cuadro 
+anterior. Si no hacemos esto, existira un efecto rastro de todo
+lo que se mueve "como cuando quitamos el SO instalado en algun 
+medio extraible"
+Puedes hacer la prueba comentando glClear(...) y ver que es lo que sucede
+*/
+void display(void)
+{
+	//curiosamente si omito glClear se borra todo
+	//y solo aparece la ventana en color negro
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glLoadIdentity();
+
+	// 1. CÁMARA (Drone) - Se mueve con Clic IZQUIERDO
+	float radX = camAngleX * 3.14159f / 180.0f;
+	float radY = camAngleY * 3.14159f / 180.0f;
+
+	/*
+	bloque de los ojos: 
+		Aquí se convierten los ángulos de "Dron" en una posicion 3D real
+		Es dode se hace la conversión de Polar a Cartesiano
+			- Ojo (camX,camY,camZ): que es donde estamos
+			- centro (0,0,0): que estas mirando (El cubo siempre
+				está en el origen)
+			- Arriba(0,1,0): Dónde está el "cielo". Si ponemos:
+			  (0,-1,0), todo se pondria de cabeza.
+	*/
+	float camX = camDist * sin(radX) * cos(radY);
+	float camY = camDist * sin(radY);
+	float camZ = camDist * cos(radX) * cos(radY);
+
+	gluLookAt(camX, camY, camZ, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+
+	// 2. DIBUJAR FOCO Y PISO
+	DibujarFoco();
+	DibujarPiso();
+
+	// 3. DIBUJAR LA SOMBRA (Debe rotar igual que el cubo)
+	GLfloat sombraMat[16];
+
+	/*
+	glDisable(GL_DEPTH_TEST)
+		- El problema: la sombra matemática cae exactamente en el 
+		  mismo pixel que el piso (Y = -2). La computadora no sabe 
+		  cuál dibujar primero y parpadea efecto #Z-Fighting#
+		- La solución: "Desactivar la prueba de profundidad"
+		  le ordenamos a OpenGL que pinte la sombra encima de lo
+		  que sea que haya ahí (en este caso el piso), sin preguntar
+		  si esta mas cerca o mas lejos.
+	*/
+	glDisable(GL_DEPTH_TEST); // Evitar parpadeo
+
+
+	glPushMatrix();
+	gltMakeShadowMatrix(floorPlane, lightPos, sombraMat);
+
+	/*
+	- Activamos la trituradora. Todo lo que dibujamos después de esta línea
+	será aplastado
+		glMultMatrix y le pasamos 
+	*/
+	glMultMatrixf(sombraMat); // 1. Aplastamos
+
+	// --- CORRECCIÓN AQUÍ: Rotación Dinámica para la Sombra ---
+	glRotatef(theta[0], 1.0, 0.0, 0.0);
+	glRotatef(theta[1], 0.0, 1.0, 0.0);
+	// ---------------------------------------------------------
+
+	glColor3f(0.0f, 0.0f, 0.0f);
+	colorcube_sin_color();
+	glPopMatrix();
+
+	glEnable(GL_DEPTH_TEST);
+
+	// 4. DIBUJAR OBJETO REAL (Debe obedecer al mouse)
+	glPushMatrix();
+	// --- CORRECCIÓN AQUÍ: Quitamos el "30.0" fijo y ponemos tus variables ---
+	glRotatef(theta[0], 1.0, 0.0, 0.0);
+	glRotatef(theta[1], 0.0, 1.0, 0.0);
+	// -----------------------------------------------------------------------
+
+	colorcube();
+	glPopMatrix();
+
+	glutSwapBuffers();
+}
+
+void myReshape(int w, int h)
+{
+	glViewport(0, 0, w, h);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	gluPerspective(60.0f, (GLfloat)w / (GLfloat)h, 1.0f, 100.0f); // Perspectiva real
+	glMatrixMode(GL_MODELVIEW);
+}
+
+void spinCube()
+{
+	// Solo giramos si el interruptor está encendido
+	if (animacionActiva) {
+		theta[0] += 1.0f; // Gira en X
+		theta[1] += 0.5f; // Gira en Y un poco más lento
+		if (theta[0] > 360.0) theta[0] -= 360.0;
+		if (theta[1] > 360.0) theta[1] -= 360.0;
+
+		glutPostRedisplay(); // ¡Dibuja de nuevo!
+	}
+}
+
+int main(int argc, char** argv)
+{
+	glutInit(&argc, argv);
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
+	glutInitWindowSize(800, 600);
+	glutCreateWindow("Proyecto Graficas: Sombras + Camara Drone");
+
+	glutReshapeFunc(myReshape);
+	glutDisplayFunc(display);
+
+	// Registro de controles
+	glutKeyboardFunc(keyboard); // Teclas W, S
+	glutSpecialFunc(specialKeys); // Flechas
+	glutMouseFunc(mouseButton); // Click
+	glutMotionFunc(mouseMove);  // Arrastre
+	//glutIdleFunc(spinCube); // Esta función se ejecuta siempre que la compu descansa
+
+	glEnable(GL_DEPTH_TEST);
+
+	glutMainLoop();
+	return 0;
+}
