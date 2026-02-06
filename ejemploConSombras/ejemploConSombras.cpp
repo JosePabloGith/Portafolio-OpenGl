@@ -50,7 +50,7 @@ de la pantalla.
 */
 
 // 1. Control de CÁMARA (Sistema Polar para efecto Drone)
-float camDist = 10.0f;  // Distancia inicial
+float camDist = 15.0f;  // Distancia inicial
 float camAngleX = 0.0f; // Rotación horizontal
 float camAngleY = 0.0f; // Rotación vertical
 int lastMouseX, lastMouseY; // Para rastrear el arrastre del mouse
@@ -70,6 +70,12 @@ GLfloat floorPlane[4] = { 0.0f, 1.0f, 0.0f, 2.0f };
 
 static GLfloat theta[] = { 0.0f, 0.0f, 0.0f }; // Ángulos de rotación del cubo
 
+// nuevas variables para la implementacion de las funciones debugg 05/02/2026
+bool bCull = false; //estara destinado para usarlo con F1: ocultar las caras traseras
+bool bDepth = true; // enfocado en la profundidad con F2: Z-buffer
+bool bWireframe = false; //para el modo alambre : F3
+bool bSmooth = false; // para el efecto de suavizado : F4
+
 // ---------------- GEOMETRÍA DEL CUBO (LEGACY) ---------------- //
 /*
 El esqueleto : LA construcción del Cubo (cara 0 a cara 6)
@@ -77,13 +83,32 @@ Aqui ocurre algo magico, llamado Modelado Jerárquico. No dibujaremos un cubo de
 y la clonamos moviendola :D
 */
 void cara0() {
-	glShadeModel(GL_FLAT);
-	glBegin(GL_POLYGON);
-	glVertex3f(1., 1., 0);
-	glVertex3f(1., -1., 0);
-	glVertex3f(-1., -1., 0);
-	glVertex3f(-1., 1., 0);
-	glEnd();
+	// Si el modo Suavizado (F4) está activo...
+	if (bSmooth) {
+		glShadeModel(GL_SMOOTH);
+		glBegin(GL_POLYGON);
+		glNormal3f(0.0f, 0.0f, 1.0f);
+
+		// HACK DE DEBUGGING: 
+		// Forzamos colores diferentes en cada esquina para ver el degradado
+		glColor3f(1.0f, 0.0f, 0.0f); glVertex3f(1., 1., 0);   // Rojo
+		glColor3f(0.0f, 1.0f, 0.0f); glVertex3f(1., -1., 0);  // Verde
+		glColor3f(0.0f, 0.0f, 1.0f); glVertex3f(-1., -1., 0); // Azul
+		glColor3f(1.0f, 1.0f, 0.0f); glVertex3f(-1., 1., 0);  // Amarillo
+		glEnd();
+	}
+	else {
+		// Si F4 está apagado, funcionamos normal (Color Sólido FLat)
+		glShadeModel(GL_FLAT);
+		glBegin(GL_POLYGON);
+		glNormal3f(0.0f, 0.0f, 1.0f);
+		// Aquí NO ponemos glColor, así que usará el color que definió colorcube()
+		glVertex3f(1., 1., 0);
+		glVertex3f(1., -1., 0);
+		glVertex3f(-1., -1., 0);
+		glVertex3f(-1., 1., 0);
+		glEnd();
+	}
 }
 
 /*
@@ -248,11 +273,34 @@ void keyboard(unsigned char key, int x, int y) {
 void specialKeys(int key, int x, int y) {
 	float step = 0.5f;
 	switch (key) {
-	case GLUT_KEY_UP:    lightPos[2] -= step; break; // Z Atrás
-	case GLUT_KEY_DOWN:  lightPos[2] += step; break; // Z Adelante
-	case GLUT_KEY_LEFT:  lightPos[0] -= step; break; // X Izquierda
-	case GLUT_KEY_RIGHT: lightPos[0] += step; break; // X Derecha
+		case GLUT_KEY_UP:    lightPos[2] -= step; break; // Z Atrás
+		case GLUT_KEY_DOWN:  lightPos[2] += step; break; // Z Adelante
+		case GLUT_KEY_LEFT:  lightPos[0] -= step; break; // X Izquierda
+		case GLUT_KEY_RIGHT: lightPos[0] += step; break; // X Derecha
+
+		//Controles de estado (modo DEBUGG)
+		case GLUT_KEY_F1:
+			bCull = !bCull;
+			//Recuerda que openGl usa "Counter Clockwise (CCW) por defecto para el frene"
+			if (bCull) glEnable(GL_CULL_FACE);
+			else glDisable(GL_CULL_FACE);
+			break;
+		case GLUT_KEY_F2:
+			bDepth = !bDepth;
+			if (bDepth) glEnable(GL_DEPTH_TEST);
+			else glDisable(GL_DEPTH_TEST);
+			break;
+		case GLUT_KEY_F3:
+			bWireframe = !bWireframe;
+			if (bWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+			else glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+			break;
+		case GLUT_KEY_F4:
+			bSmooth = !bSmooth;
+			// recuerda que el cambio real solo es neceario dentro de la cara 0 al redibujar :D
+			break;
 	}
+
 	glutPostRedisplay();
 }
 
@@ -326,9 +374,16 @@ anterior. Si no hacemos esto, existira un efecto rastro de todo
 lo que se mueve "como cuando quitamos el SO instalado en algun 
 medio extraible"
 Puedes hacer la prueba comentando glClear(...) y ver que es lo que sucede
+
+
+actualizacion para la implementacion de las teclas especiales
+// 1. Preguntamos: "¿Cómo estaba el interruptor ANTES de la sombra?"
+// 2. Apagamos OBLIGATORIAMENTE para la sombra (la sombra siempre necesita esto off)
+// 3. Restauramos: "Déjalo como lo encontraste"
+
 */
-void display(void)
-{
+void display(void){
+	//Limpieza
 	//curiosamente si omito glClear se borra todo
 	//y solo aparece la ventana en color negro
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -338,28 +393,19 @@ void display(void)
 	float radX = camAngleX * 3.14159f / 180.0f;
 	float radY = camAngleY * 3.14159f / 180.0f;
 
-	/*
-	bloque de los ojos: 
-		Aquí se convierten los ángulos de "Dron" en una posicion 3D real
-		Es dode se hace la conversión de Polar a Cartesiano
-			- Ojo (camX,camY,camZ): que es donde estamos
-			- centro (0,0,0): que estas mirando (El cubo siempre
-				está en el origen)
-			- Arriba(0,1,0): Dónde está el "cielo". Si ponemos:
-			  (0,-1,0), todo se pondria de cabeza.
-	*/
-	float camX = camDist * sin(radX) * cos(radY);
-	float camY = camDist * sin(radY);
-	float camZ = camDist * cos(radX) * cos(radY);
 
-	gluLookAt(camX, camY, camZ, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+
+	gluLookAt(camDist * sin(radX) * cos(radY) , camDist * sin(radY) , camDist * cos(radX) * cos(radY),
+				0,0,0,  0,1,0);
 
 	// 2. DIBUJAR FOCO Y PISO
 	DibujarFoco();
 	DibujarPiso();
 
-	// 3. DIBUJAR LA SOMBRA (Debe rotar igual que el cubo)
-	GLfloat sombraMat[16];
+	// 3. SOMBRA
+		// Nota experta: Aunque F2 apague el Depth Test globalmente,
+		// la sombra SIEMPRE necesita Depth Test apagado para dibujarse.
+	GLboolean profundidadEstabaActiva = glIsEnabled(GL_DEPTH_TEST);
 
 	/*
 	glDisable(GL_DEPTH_TEST)
@@ -375,36 +421,39 @@ void display(void)
 
 
 	glPushMatrix();
-	gltMakeShadowMatrix(floorPlane, lightPos, sombraMat);
+		GLfloat sombraMat[16];
+		gltMakeShadowMatrix(floorPlane, lightPos, sombraMat);
 
 	/*
 	- Activamos la trituradora. Todo lo que dibujamos después de esta línea
 	será aplastado
 		glMultMatrix y le pasamos 
 	*/
-	glMultMatrixf(sombraMat); // 1. Aplastamos
+		glMultMatrixf(sombraMat); // 1. Aplastamos
 
-	// --- CORRECCIÓN AQUÍ: Rotación Dinámica para la Sombra ---
-	glRotatef(theta[0], 1.0, 0.0, 0.0);
-	glRotatef(theta[1], 0.0, 1.0, 0.0);
-	// ---------------------------------------------------------
+		// --- CORRECCIÓN AQUÍ: Rotación Dinámica para la Sombra ---
+		glRotatef(theta[0], 1.0, 0.0, 0.0);
+		glRotatef(theta[1], 0.0, 1.0, 0.0);
+		// ---------------------------------------------------------
 
-	glColor3f(0.0f, 0.0f, 0.0f);
-	colorcube_sin_color();
+		glColor3f(0.0f, 0.0f, 0.0f);
+		colorcube_sin_color();
 	glPopMatrix();
 
-	glEnable(GL_DEPTH_TEST);
+
+
+
+	// Restauramos el estado de profundidad según lo que diga F2
+	if (profundidadEstabaActiva) glEnable(GL_DEPTH_TEST);
 
 	// 4. DIBUJAR OBJETO REAL (Debe obedecer al mouse)
 	glPushMatrix();
 	// --- CORRECCIÓN AQUÍ: Quitamos el "30.0" fijo y ponemos tus variables ---
-	glRotatef(theta[0], 1.0, 0.0, 0.0);
-	glRotatef(theta[1], 0.0, 1.0, 0.0);
-	// -----------------------------------------------------------------------
-
-	colorcube();
+		glRotatef(theta[0], 1.0, 0.0, 0.0);
+		glRotatef(theta[1], 0.0, 1.0, 0.0);
+		colorcube();
 	glPopMatrix();
-
+	// -----------------------------------------------------------------------
 	glutSwapBuffers();
 }
 
@@ -435,7 +484,7 @@ int main(int argc, char** argv)
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
 	glutInitWindowSize(800, 600);
-	glutCreateWindow("Proyecto Graficas: Sombras + Camara Drone");
+	glutCreateWindow("Proyecto Graficas: Sombras + Camara Drone + debugger F1-F4");
 
 	glutReshapeFunc(myReshape);
 	glutDisplayFunc(display);
@@ -447,7 +496,11 @@ int main(int argc, char** argv)
 	glutMotionFunc(mouseMove);  // Arrastre
 	//glutIdleFunc(spinCube); // Esta función se ejecuta siempre que la compu descansa
 
+	//configuracion inicial
 	glEnable(GL_DEPTH_TEST);
+
+	// IMPORTANTE: Definir el orden de los vértices para que F1 funcione
+	glFrontFace(GL_CCW); // Counter Clock-Wise (Sentido antihorario es el frente)
 
 	glutMainLoop();
 	return 0;
