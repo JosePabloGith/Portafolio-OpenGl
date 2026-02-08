@@ -210,6 +210,8 @@ void DibujarPiso() {
 }
 
 // Dibuja una esfera amarilla donde está la luz (para saber qué movemos)
+// no es necesario actualizar esta funcsion para agregar la caracteristica de control de foco
+//    dado que funciona de manera dinamica usando lightPost
 void DibujarFoco() {
 	glPushMatrix();
 	glTranslatef(lightPos[0], lightPos[1], lightPos[2]);
