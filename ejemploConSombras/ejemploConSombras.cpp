@@ -276,6 +276,14 @@ void keyboard(unsigned char key, int x, int y) {
 	case 27: // ESC para salir
 		exit(0);
 		break;
+	case '8' : // aumentamos la altura del foco
+		alturaLuz += 0.5f; // 0.5 por sincronia con el acercamiento y alejamiento
+		lightPos[1]= alturaLuz;
+		break;
+	case '2': //decrementamos la altura del foco
+		alturaLuz -= 0.5;
+		lightPos[1] = alturaLuz;
+		break;
 	}
 	glutPostRedisplay();
 }
