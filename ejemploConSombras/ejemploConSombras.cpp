@@ -23,6 +23,14 @@ la idea es usar las siguientes caraceristicas
 	-Teoria: GL_FLAT (un color por cara) vs GL_SMOOTH (mezcla los colores de los vértices)
 		-- efecto visual esperado: En nuestro cubo de colores sólidos se notará poco, pero si tuvieramos 
 		un cubo multicolor en una sola cara, veriamos un degradado suavecito. 
+
+Nueva implementacion 08/02/2026
+	- De momento nos encargaremos de darle control de "altura eje Y" al foco puntual 
+	  para que la luz pueda asecender o descender. 
+	  para ello pensamos en la siguiente logica: 
+		- si pulsamos el numero '8' entondes incrementaremos la altura a la cual se encuentra el foco
+		- si pulsamos el numero '2' entonces decrementa remos la altura a la cual se encuentra el foco
+
 */
 #include <math.h>
 #include <stdio.h>
