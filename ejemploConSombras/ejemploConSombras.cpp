@@ -69,8 +69,11 @@ int interactionMode = 0; // 0 = Nada, 1 = Moviendo CÁMARA, 2 = Moviendo CUBO
 bool animacionActiva = false; // El interruptor inicia apagado
 
 // 2. Control de LUZ (El Foco)
-// Posición inicial: Arriba y a la izquierda
+// Posición inicial: Arriba y a la izquierda , declaramos.
 float lightPos[4] = { -4.0f, 4.0f, 4.0f, 1.0f };
+
+// Posisión inicial altura eje Y del foco
+float alturaLuz = 4.0f;
 
 // 3. Definición del PISO (Plano matemático)
 // Ecuación: 0x + 1y + 0z + 2 = 0  (Piso en Y = -2.0)
