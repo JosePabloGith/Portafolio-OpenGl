@@ -49,7 +49,25 @@ Actualizacion:
 			  -- pero para que quede mas claro es mejor usar una esfera de referencia
 
 */
+
+/*
+   PROYECTO: SOMBRAS, CÁMARA DRONE, COLISIONES Y DEBUGGING
+   -------------------------------------------------------------------------
+   CONTROLES:
+   [Click Izq + Arrastrar] : Cámara Orbital (Drone)
+   [Click Der + Arrastrar] : Rotar Cubo (Trackball)
+   [W] / [S]               : Zoom In / Zoom Out
+   [8] / [2]               : Subir / Bajar Foco (Con colisión esférica)
+   [Flechas]               : Mover Foco en X/Z (Con colisión esférica)
+   [+] / [-]               : Escalar Cubo (Tamaño dinámico)
+   [F]                     : Ver/Ocultar Esfera de Colisión
+
+   DEBUGGING:
+   [F1] Culling    [F2] Depth Test    [F3] Wireframe    [F4] Smooth Shading
+   -------------------------------------------------------------------------
+*/
 #include <math.h>
+#include <cmath>
 #include <stdio.h>
 #include"glut.h"
 
@@ -288,6 +306,11 @@ void gltMakeShadowMatrix(GLfloat vPlaneEquation[], GLfloat vLightPos[], GLfloat 
 
 // Teclado Normal: W/S para Zoom
 void keyboard(unsigned char key, int x, int y) {
+
+	//dado que el cubo es variable, nececitamos calcular el radio de la esfera 
+	//que usaremos para dibujar el campo de fuerza 
+	float limiteEsferaDinamica = 1.8 * escalaCubo;
+
 	switch (key) {
 	case 'w': case 'W': // Zoom In
 		if (camDist > 3.0f) camDist -= 0.5f;
@@ -298,51 +321,140 @@ void keyboard(unsigned char key, int x, int y) {
 	case 27: // ESC para salir
 		exit(0);
 		break;
-	case '8' : // aumentamos la altura del foco
-		alturaLuz += 0.5f; // 0.5 por sincronia con el acercamiento y alejamiento
-		lightPos[1]= alturaLuz;
+
+	case '8': // Aumentar altura
+	{   // <--- ¡LLAVE MÁGICA DE APERTURA! 
+
+		// 1. Predecir el futuro
+		float futuraAltura = alturaLuz + 0.5f;
+
+		// 2. Calcular distancia futura
+		float distFutura = sqrt(pow(lightPos[0], 2) + pow(futuraAltura, 2) + pow(lightPos[2], 2));
+
+		// 3. El límite dinámico
+		float radioSeguridad = 1.8f * escalaCubo;
+
+		// 4. El IF Salvador
+		if (distFutura > radioSeguridad) {
+			alturaLuz = futuraAltura;
+			lightPos[1] = alturaLuz;
+		}
 		break;
-	case '2': //decrementamos la altura del foco
-		alturaLuz -= 0.5;
-		lightPos[1] = alturaLuz;
+	}   // <--- ¡LLAVE MÁGICA DE CIERRE!
+
+	case '2': // Bajar altura
+	{   // <--- OTRA LLAVE AQUÍ
+
+		// 1. Predecir futuro (bajar)
+		float futuraAltura = alturaLuz - 0.5f;
+
+		// 2. Calcular distancia futura
+		// NOTA: Usamos la futuraAltura, no la actual, para predecir el choque
+		float distFutura = sqrt(pow(lightPos[0], 2) + pow(futuraAltura, 2) + pow(lightPos[2], 2));
+
+		float radioSeguridad = 1.8f * escalaCubo;
+
+		// 3. IF de protección (Esfera + Piso)
+		if (distFutura > radioSeguridad && futuraAltura > -2.0f) {
+			alturaLuz = futuraAltura;
+			lightPos[1] = alturaLuz;
+		}
+		break;
+	}   // <--- CIERRE DE LLAVE
+
+	case 'f': case 'F': // Activar o desactivar campo de fuerza
+		bMostrarEsfera = !bMostrarEsfera;
+		break;
+
+	case '+': // Agrandamos el cubo
+		escalaCubo += 0.1f;
+		break;
+
+	case '-': // Achicamos el cubo
+		if (escalaCubo > 0.2f) {
+			escalaCubo -= 0.1f;
+		}
 		break;
 	}
 	glutPostRedisplay();
 }
 
 // Flechas: Mover la Luz
+//Actualizacion de aproximacion segura usando las teclas especiales
+// Flechas: Mover la Luz en el plano XZ
 void specialKeys(int key, int x, int y) {
-	float step = 0.5f;
-	switch (key) {
-		case GLUT_KEY_UP:    lightPos[2] -= step; break; // Z Atrás
-		case GLUT_KEY_DOWN:  lightPos[2] += step; break; // Z Adelante
-		case GLUT_KEY_LEFT:  lightPos[0] -= step; break; // X Izquierda
-		case GLUT_KEY_RIGHT: lightPos[0] += step; break; // X Derecha
 
-		//Controles de estado (modo DEBUGG)
-		case GLUT_KEY_F1:
-			bCull = !bCull;
-			//Recuerda que openGl usa "Counter Clockwise (CCW) por defecto para el frene"
-			if (bCull) glEnable(GL_CULL_FACE);
-			else glDisable(GL_CULL_FACE);
-			break;
-		case GLUT_KEY_F2:
-			bDepth = !bDepth;
-			if (bDepth) glEnable(GL_DEPTH_TEST);
-			else glDisable(GL_DEPTH_TEST);
-			break;
-		case GLUT_KEY_F3:
-			bWireframe = !bWireframe;
-			if (bWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-			else glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-			break;
-		case GLUT_KEY_F4:
-			bSmooth = !bSmooth;
-			// recuerda que el cambio real solo es neceario dentro de la cara 0 al redibujar :D
-			break;
+	// --- SECCIÓN 1: INTERRUPTORES (F1 - F4) ---
+	// Si presionamos una F, cambiamos el estado y nos vamos.
+	if (key == GLUT_KEY_F1) {
+		bCull = !bCull;
+		printf("F1: Culling (Recorte) %s\n", bCull ? "ACTIVADO" : "APAGADO");
+		glutPostRedisplay();
+		return;
+	}
+	if (key == GLUT_KEY_F2) {
+		bDepth = !bDepth;
+		printf("F2: Z-Buffer (Profundidad) %s\n", bDepth ? "ACTIVADO" : "APAGADO");
+		glutPostRedisplay();
+		return;
+	}
+	if (key == GLUT_KEY_F3) {
+		bWireframe = !bWireframe;
+		printf("F3: Modo Alambre %s\n", bWireframe ? "ACTIVADO" : "APAGADO");
+		glutPostRedisplay();
+		return;
+	}
+	if (key == GLUT_KEY_F4) {
+		bSmooth = !bSmooth;
+		printf("F4: Suavizado %s\n", bSmooth ? "ACTIVADO" : "APAGADO");
+		glutPostRedisplay();
+		return;
 	}
 
-	glutPostRedisplay();
+	// --- SECCIÓN 2: MOVIMIENTO (FLECHAS) ---
+	// Solo entramos aquí si NO fue una tecla F
+
+	float radioSeguridad = 1.8f * escalaCubo;
+	float nuevoX = lightPos[0];
+	float nuevoZ = lightPos[2];
+	float velocidad = 0.5f;
+	bool esTeclaDeMovimiento = false; // Bandera para saber si calculamos colisión
+
+	switch (key) {
+	case GLUT_KEY_UP:
+		nuevoZ -= velocidad;
+		esTeclaDeMovimiento = true;
+		break;
+	case GLUT_KEY_DOWN:
+		nuevoZ += velocidad;
+		esTeclaDeMovimiento = true;
+		break;
+	case GLUT_KEY_LEFT:
+		nuevoX -= velocidad;
+		esTeclaDeMovimiento = true;
+		break;
+	case GLUT_KEY_RIGHT:
+		nuevoX += velocidad;
+		esTeclaDeMovimiento = true;
+		break;
+	}
+
+	// Solo verificamos colisión si realmente intentamos movernos
+	if (esTeclaDeMovimiento) {
+		// Matemática segura (sin pow)
+		float distCuadrada = (nuevoX * nuevoX) + (alturaLuz * alturaLuz) + (nuevoZ * nuevoZ);
+		float radioCuadrado = radioSeguridad * radioSeguridad;
+
+		if (distCuadrada > radioCuadrado) {
+			lightPos[0] = nuevoX;
+			lightPos[2] = nuevoZ;
+			// printf(">>> Movimiento APROBADO.\n"); // Comenta esto si te satura la consola
+		}
+		else {
+			printf("!!! CHOQUE DETECTADO. Campo de fuerza activo.\n");
+		}
+		glutPostRedisplay();
+	}
 }
 
 // Mouse: Click para empezar a arrastrar
@@ -423,78 +535,71 @@ actualizacion para la implementacion de las teclas especiales
 // 3. Restauramos: "Déjalo como lo encontraste"
 
 */
-void display(void){
-	//Limpieza
-	//curiosamente si omito glClear se borra todo
-	//y solo aparece la ventana en color negro
+void display(void) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
 
-	// 1. CÁMARA (Drone) - Se mueve con Clic IZQUIERDO
+	// APLICAR ESTADOS DE DEBUGGING
+	if (bCull) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+	if (bDepth) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+	if (bWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	else glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	if (bSmooth) glShadeModel(GL_SMOOTH); else glShadeModel(GL_FLAT);
+
+	// 1. CÁMARA
 	float radX = camAngleX * 3.14159f / 180.0f;
 	float radY = camAngleY * 3.14159f / 180.0f;
+	gluLookAt(camDist * sin(radX) * cos(radY), camDist * sin(radY), camDist * cos(radX) * cos(radY),
+		0, 0, 0, 0, 1, 0);
 
-
-
-	gluLookAt(camDist * sin(radX) * cos(radY) , camDist * sin(radY) , camDist * cos(radX) * cos(radY),
-				0,0,0,  0,1,0);
-
-	// 2. DIBUJAR FOCO Y PISO
+	// 2. DIBUJAR ESCENARIO
 	DibujarFoco();
 	DibujarPiso();
 
-	// 3. SOMBRA
-		// Nota experta: Aunque F2 apague el Depth Test globalmente,
-		// la sombra SIEMPRE necesita Depth Test apagado para dibujarse.
+	// 3. DIBUJAR SOMBRA
 	GLboolean profundidadEstabaActiva = glIsEnabled(GL_DEPTH_TEST);
+	GLboolean luzEstabaActiva = glIsEnabled(GL_LIGHTING); // Guardar estado de luz
 
-	/*
-	glDisable(GL_DEPTH_TEST)
-		- El problema: la sombra matemática cae exactamente en el 
-		  mismo pixel que el piso (Y = -2). La computadora no sabe 
-		  cuál dibujar primero y parpadea efecto #Z-Fighting#
-		- La solución: "Desactivar la prueba de profundidad"
-		  le ordenamos a OpenGL que pinte la sombra encima de lo
-		  que sea que haya ahí (en este caso el piso), sin preguntar
-		  si esta mas cerca o mas lejos.
-	*/
-	glDisable(GL_DEPTH_TEST); // Evitar parpadeo
-
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_LIGHTING); // <--- APAGAR LUCES PARA PODER USAR COLOR PURO
 
 	glPushMatrix();
-		GLfloat sombraMat[16];
-		gltMakeShadowMatrix(floorPlane, lightPos, sombraMat);
+	GLfloat sombraMat[16];
+	gltMakeShadowMatrix(floorPlane, lightPos, sombraMat);
+	glMultMatrixf(sombraMat);
 
-	/*
-	- Activamos la trituradora. Todo lo que dibujamos después de esta línea
-	será aplastado
-		glMultMatrix y le pasamos 
-	*/
-		glMultMatrixf(sombraMat); // 1. Aplastamos
+	glRotatef(theta[0], 1.0, 0.0, 0.0);
+	glRotatef(theta[1], 0.0, 1.0, 0.0);
+	glScalef(escalaCubo, escalaCubo, escalaCubo);
 
-		// --- CORRECCIÓN AQUÍ: Rotación Dinámica para la Sombra ---
-		glRotatef(theta[0], 1.0, 0.0, 0.0);
-		glRotatef(theta[1], 0.0, 1.0, 0.0);
-		// ---------------------------------------------------------
+	// CORRECCIÓN VISUAL: Sombra Blanca en modo Alambre para verla sobre fondo negro
+	if (bWireframe) glColor3f(1.0f, 1.0f, 1.0f);
+	else glColor3f(0.0f, 0.0f, 0.0f);
 
-		glColor3f(0.0f, 0.0f, 0.0f);
-		colorcube_sin_color();
+	colorcube_sin_color();
 	glPopMatrix();
 
-
-
-
-	// Restauramos el estado de profundidad según lo que diga F2
+	// Restaurar estados
 	if (profundidadEstabaActiva) glEnable(GL_DEPTH_TEST);
+	if (luzEstabaActiva) glEnable(GL_LIGHTING);
 
-	// 4. DIBUJAR OBJETO REAL (Debe obedecer al mouse)
+	// 4. DIBUJAR OBJETO REAL
 	glPushMatrix();
-	// --- CORRECCIÓN AQUÍ: Quitamos el "30.0" fijo y ponemos tus variables ---
-		glRotatef(theta[0], 1.0, 0.0, 0.0);
-		glRotatef(theta[1], 0.0, 1.0, 0.0);
-		colorcube();
+	glRotatef(theta[0], 1.0, 0.0, 0.0);
+	glRotatef(theta[1], 0.0, 1.0, 0.0);
+
+	if (bMostrarEsfera) {
+		// Esfera blanca también requiere apagar luces para verse blanca y no grisácea
+		glDisable(GL_LIGHTING);
+		glColor3f(1.0f, 1.0f, 1.0f);
+		glutWireSphere(1.8f * escalaCubo, 15, 15);
+		if (luzEstabaActiva) glEnable(GL_LIGHTING);
+	}
+
+	glScalef(escalaCubo, escalaCubo, escalaCubo);
+	colorcube();
 	glPopMatrix();
-	// -----------------------------------------------------------------------
+
 	glutSwapBuffers();
 }
 
