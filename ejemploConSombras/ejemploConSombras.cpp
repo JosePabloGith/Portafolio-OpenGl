@@ -31,6 +31,23 @@ Nueva implementacion 08/02/2026
 		- si pulsamos el numero '8' entondes incrementaremos la altura a la cual se encuentra el foco
 		- si pulsamos el numero '2' entonces decrementa remos la altura a la cual se encuentra el foco
 
+Actualizacion: 
+	se ha detectado un fallo respecto a un bugg de acercamiento, sucede cuado el foco 
+	puntual toca el cubo, en la deformacion de la sobra se rompe la impresion de la imagen
+		- para evitar eso es necesario hacer una correccion de proximidad.
+		  Usaremos un limitador de modo que el foco no llegue a tocar al cubo.
+
+		- Paraa poder evidenciar la esfera, usaremos la tecla 'f', la cual aactivara o descativara
+		  la esfera de referencia
+		- Tambien implementaremos un crecimiento del cubo variable, la cual podremos variar 
+		  dependiendo las necesidades
+			- esta idea tambien debe de afectar la distancia focal para evitar 
+			  que al crecer la esfera encapsule el foco puntual probocando infinidad de buggs
+			- usaremos variables globales para esta accion
+			- nota es posible no dibujar el campo de fuerza y aun asi funsionaria dado que 
+			  solo es una condicion 
+			  -- pero para que quede mas claro es mejor usar una esfera de referencia
+
 */
 #include <math.h>
 #include <stdio.h>
