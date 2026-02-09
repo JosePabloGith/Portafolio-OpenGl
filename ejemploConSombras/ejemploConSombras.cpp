@@ -81,6 +81,9 @@ float camAngleY = 0.0f; // Rotación vertical
 int lastMouseX, lastMouseY; // Para rastrear el arrastre del mouse
 //bool isDragging = false;
 
+float escalaCubo = 1.0f; // 1.0 es el tamaño base, dependiendo del cambio respondera la escala del cubo
+bool bMostrarEsfera = false; // bandera de activacion de campo, cambiara al pulsar f
+
 int interactionMode = 0; // 0 = Nada, 1 = Moviendo CÁMARA, 2 = Moviendo CUBO
 
 bool animacionActiva = false; // El interruptor inicia apagado
