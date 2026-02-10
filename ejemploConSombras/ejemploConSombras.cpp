@@ -31,7 +31,7 @@ Nueva implementacion 08/02/2026
 		- si pulsamos el numero '8' entondes incrementaremos la altura a la cual se encuentra el foco
 		- si pulsamos el numero '2' entonces decrementa remos la altura a la cual se encuentra el foco
 
-Actualizacion: 
+Actualizaciones: 
 	se ha detectado un fallo respecto a un bugg de acercamiento, sucede cuado el foco 
 	puntual toca el cubo, en la deformacion de la sobra se rompe la impresion de la imagen
 		- para evitar eso es necesario hacer una correccion de proximidad.
@@ -47,6 +47,11 @@ Actualizacion:
 			- nota es posible no dibujar el campo de fuerza y aun asi funsionaria dado que 
 			  solo es una condicion 
 			  -- pero para que quede mas claro es mejor usar una esfera de referencia
+
+-- 10/02/2026
+	- Implementaremos un reflejo, con todas las considerasiones 
+		como que realmente no es un reflejo, solo es un copia y pega de la misma entidad en 
+		el lado opuesto
 
 */
 
