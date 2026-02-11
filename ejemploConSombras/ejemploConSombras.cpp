@@ -1,5 +1,6 @@
-/*Actualización 05/02/2026 para el uso de github :D*/
-/*Segunda actualizacion implementacion de caracteristicas de debugger
+/*
+
+Segunda actualizacion implementacion de caracteristicas de debugger
 la idea es usar las siguientes caraceristicas
 
 (F1) Culling (Recorte de caras traseras)
@@ -48,12 +49,13 @@ Actualizaciones:
 			  solo es una condicion 
 			  -- pero para que quede mas claro es mejor usar una esfera de referencia
 
--- 10/02/2026
-	- Implementaremos un reflejo, con todas las considerasiones 
+	//-- 10/02/2026
+	//- Implementaremos un reflejo, con todas las considerasiones 
 		como que realmente no es un reflejo, solo es un copia y pega de la misma entidad en 
 		el lado opuesto
 
 */
+
 
 /*
    PROYECTO: SOMBRAS, CÁMARA DRONE, COLISIONES Y DEBUGGING
@@ -71,6 +73,8 @@ Actualizaciones:
    [F1] Culling    [F2] Depth Test    [F3] Wireframe    [F4] Smooth Shading
    -------------------------------------------------------------------------
 */
+
+
 #include <math.h>
 #include <cmath>
 #include <stdio.h>
@@ -242,7 +246,13 @@ void colorcube_sin_color(void) {
 // Dibuja el piso gris y una rejilla para referencia
 void DibujarPiso() {
 	// Superficie sólida
-	glColor3f(0.6f, 0.6f, 0.6f);
+	/*Si queremos reflejo, en el piso debemos de ajustar un poco la transparencia*/
+	//consideramos Alpha = 0.7 (70% opaco)
+	// nota usamos glColor4f para el efecto de transparencia
+	// Color Azul Cianoso + Transparencia Media (Alpha 0.6)
+	// R: 0.1, G: 0.3, B: 0.5 (Azul oscuro tipo océano)
+	// A: 0.6 (Deja ver el reflejo pero mantiene el color del agua)
+	glColor4f(0.1f, 0.3f, 0.5f,0.6f);
 	glBegin(GL_QUADS);
 	glNormal3f(0.0f, 1.0f, 0.0f);
 	glVertex3f(-10.0f, -2.0f, -10.0f);
@@ -260,6 +270,16 @@ void DibujarFoco() {
 	glTranslatef(lightPos[0], lightPos[1], lightPos[2]);
 	glColor3f(1.0f, 1.0f, 0.0f); // Amarillo
 	glutSolidSphere(0.2, 10, 10);
+	glPopMatrix();
+}
+
+// Helper para dibujar el cubo en su posición actual (Evita repetir código en display)
+void DibujarCuboEnPosicion() {
+	glPushMatrix();
+	glRotatef(theta[0], 1.0, 0.0, 0.0);
+	glRotatef(theta[1], 0.0, 1.0, 0.0);
+	glScalef(escalaCubo, escalaCubo, escalaCubo);
+	colorcube();
 	glPopMatrix();
 }
 
@@ -541,32 +561,107 @@ actualizacion para la implementacion de las teclas especiales
 
 */
 void display(void) {
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	// 1. Limpiamos buffers: Color, Profundidad ¡Y STENCIL!
+	// >>> GEMA 1: Agregar GL_STENCIL_BUFFER_BIT
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	glLoadIdentity();
 
-	// APLICAR ESTADOS DE DEBUGGING
+	// Estados de Debug
 	if (bCull) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
 	if (bDepth) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
 	if (bWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	else glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	if (bSmooth) glShadeModel(GL_SMOOTH); else glShadeModel(GL_FLAT);
 
-	// 1. CÁMARA
+	// Cámara
 	float radX = camAngleX * 3.14159f / 180.0f;
 	float radY = camAngleY * 3.14159f / 180.0f;
 	gluLookAt(camDist * sin(radX) * cos(radY), camDist * sin(radY), camDist * cos(radX) * cos(radY),
 		0, 0, 0, 0, 1, 0);
 
-	// 2. DIBUJAR ESCENARIO
+	// Dibujar luz (siempre visible)
 	DibujarFoco();
+
+	// =============================================================
+	// >>> GEMA 1: FASE 1 - PREPARAR EL ESPEJO (STENCIL)
+	// =============================================================
+	// Objetivo: Marcar en el Stencil Buffer dónde está el piso
+
+	glEnable(GL_STENCIL_TEST); // Encendemos el sistema de plantillas
+	glStencilFunc(GL_ALWAYS, 1, 1); // "Siempre pasa la prueba, y escribe un 1"
+	glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE); // "Si pasas, reemplaza lo que haya con un 1"
+
+	// Deshabilitamos escritura de color/profundidad, solo queremos marcar el stencil
+	glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+	glDepthMask(GL_FALSE);
+
+	// Dibujamos el piso (invisible, solo para el stencil)
 	DibujarPiso();
 
-	// 3. DIBUJAR SOMBRA
+	// Restauramos escritura de color/profundidad
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	glDepthMask(GL_TRUE);
+
+	// =============================================================
+	// >>> GEMA 1: FASE 2 - DIBUJAR EL REFLEJO
+	// =============================================================
+	// Ahora le decimos: "Solo dibuja donde el stencil sea igual a 1"
+	glStencilFunc(GL_EQUAL, 1, 1);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP); // No modifiques el stencil, solo léelo
+
+	glPushMatrix();
+	// 1. Efecto Espejo: Escalar Y por -1 (respecto al nivel del piso)
+	// Como el piso está en Y=-2, primero movemos el mundo para que el piso sea el eje 0,
+	// escalamos, y regresamos. O usamos un truco matemático:
+	// Escalado simple en -1 invierte sobre Y=0. Nuestro piso es Y=-2.
+	// Distancia del objeto al piso = (y_obj - (-2)).
+	// Reflejo = -2 - (y_obj + 2).
+	// Transformación: Translate(0, -2, 0) -> Scale(1,-1,1) -> Translate(0, 2, 0) ??
+	// Simplificación visual: Reflejo respecto al plano Y=-2.
+
+	// TRUCO DE REFLEJO EN PLANO ARBITRARIO (Y = -2):
+	glTranslatef(0.0f, -2.0f, 0.0f); // Mover pivote al piso
+	glScalef(1.0f, -1.0f, 1.0f);     // Invertir Y
+	glTranslatef(0.0f, 2.0f, 0.0f);  // Regresar pivote (inverso de bajar es subir, pero en mundo invertido...)
+	// Nota: La traslación inversa dentro de una escala negativa es confusa.
+	// Mejor lógica: Mover al origen del espejo -> Escalar -> Mover de regreso.
+
+	// >>> CORRECCIÓN CRÍTICA DE Winding Order
+	// Al escalar por -1, los polígonos se voltean. Si CULL_FACE está activo,
+	// el reflejo desaparecería. Invertimos la definición de "Frente".
+	glFrontFace(GL_CW);
+
+	// Dibujar el objeto reflejado
+	DibujarCuboEnPosicion();
+
+	// Restaurar orden normal
+	glFrontFace(GL_CCW);
+	glPopMatrix();
+
+	// Apagamos Stencil para dibujar el resto del mundo normal
+	glDisable(GL_STENCIL_TEST);
+
+	// =============================================================
+	// >>> GEMA 1: FASE 3 - DIBUJAR EL PISO (BLENDING)
+	// =============================================================
+	// Dibujamos el piso real, pero con transparencia para ver el reflejo debajo
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	DibujarPiso(); // Ahora sí lo vemos (color grisáceo transparente)
+
+	glDisable(GL_BLEND);
+
+	// =============================================================
+	// >>> GEMA 1: FASE 4 - SOMBRAS Y OBJETOS REALES (Tu código original)
+	// =============================================================
+
+	// SOMBRA
 	GLboolean profundidadEstabaActiva = glIsEnabled(GL_DEPTH_TEST);
-	GLboolean luzEstabaActiva = glIsEnabled(GL_LIGHTING); // Guardar estado de luz
+	GLboolean luzEstabaActiva = glIsEnabled(GL_LIGHTING);
 
 	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_LIGHTING); // <--- APAGAR LUCES PARA PODER USAR COLOR PURO
+	glDisable(GL_LIGHTING);
 
 	glPushMatrix();
 	GLfloat sombraMat[16];
@@ -577,33 +672,28 @@ void display(void) {
 	glRotatef(theta[1], 0.0, 1.0, 0.0);
 	glScalef(escalaCubo, escalaCubo, escalaCubo);
 
-	// CORRECCIÓN VISUAL: Sombra Blanca en modo Alambre para verla sobre fondo negro
 	if (bWireframe) glColor3f(1.0f, 1.0f, 1.0f);
 	else glColor3f(0.0f, 0.0f, 0.0f);
 
 	colorcube_sin_color();
 	glPopMatrix();
 
-	// Restaurar estados
 	if (profundidadEstabaActiva) glEnable(GL_DEPTH_TEST);
 	if (luzEstabaActiva) glEnable(GL_LIGHTING);
 
-	// 4. DIBUJAR OBJETO REAL
-	glPushMatrix();
-	glRotatef(theta[0], 1.0, 0.0, 0.0);
-	glRotatef(theta[1], 0.0, 1.0, 0.0);
-
+	// OBJETO REAL
+	// Dibujamos el cubo real (encima del piso y la sombra)
 	if (bMostrarEsfera) {
-		// Esfera blanca también requiere apagar luces para verse blanca y no grisácea
+		glPushMatrix();
+		glRotatef(theta[0], 1.0, 0.0, 0.0);
+		glRotatef(theta[1], 0.0, 1.0, 0.0);
 		glDisable(GL_LIGHTING);
 		glColor3f(1.0f, 1.0f, 1.0f);
 		glutWireSphere(1.8f * escalaCubo, 15, 15);
 		if (luzEstabaActiva) glEnable(GL_LIGHTING);
+		glPopMatrix();
 	}
-
-	glScalef(escalaCubo, escalaCubo, escalaCubo);
-	colorcube();
-	glPopMatrix();
+	DibujarCuboEnPosicion();
 
 	glutSwapBuffers();
 }
@@ -633,9 +723,12 @@ void spinCube()
 int main(int argc, char** argv)
 {
 	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
+
+	// >>> GEMA 1: ¡IMPORTANTE! Agregar GLUT_STENCIL al modo de visualización
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_STENCIL);
+
 	glutInitWindowSize(800, 600);
-	glutCreateWindow("Proyecto Graficas: Sombras + Camara Drone + debugger F1-F4");
+	glutCreateWindow("Proyecto Graficas: Sombras + Camara Drone + debugger F1-F4 +reflejo");
 
 	glutReshapeFunc(myReshape);
 	glutDisplayFunc(display);
