@@ -255,10 +255,10 @@ void DibujarPiso() {
 	glColor4f(0.1f, 0.3f, 0.5f,0.6f);
 	glBegin(GL_QUADS);
 	glNormal3f(0.0f, 1.0f, 0.0f);
-	glVertex3f(-10.0f, -2.0f, -10.0f);
-	glVertex3f(-10.0f, -2.0f, 10.0f);
-	glVertex3f(10.0f, -2.0f, 10.0f);
-	glVertex3f(10.0f, -2.0f, -10.0f);
+	glVertex3f(-30.0f, -2.0f, -30.0f);
+	glVertex3f(-30.0f, -2.0f, 30.0f);
+	glVertex3f(30.0f, -2.0f, 30.0f);
+	glVertex3f(30.0f, -2.0f, -30.0f);
 	glEnd();
 }
 
@@ -562,7 +562,7 @@ actualizacion para la implementacion de las teclas especiales
 */
 void display(void) {
 	// 1. Limpiamos buffers: Color, Profundidad ¡Y STENCIL!
-	// >>> GEMA 1: Agregar GL_STENCIL_BUFFER_BIT
+	// >>> Agregar GL_STENCIL_BUFFER_BIT
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	glLoadIdentity();
 
@@ -583,7 +583,7 @@ void display(void) {
 	DibujarFoco();
 
 	// =============================================================
-	// >>> GEMA 1: FASE 1 - PREPARAR EL ESPEJO (STENCIL)
+	// >>>FASE 1 - PREPARAR EL ESPEJO (STENCIL)
 	// =============================================================
 	// Objetivo: Marcar en el Stencil Buffer dónde está el piso
 
@@ -603,46 +603,46 @@ void display(void) {
 	glDepthMask(GL_TRUE);
 
 	// =============================================================
-	// >>> GEMA 1: FASE 2 - DIBUJAR EL REFLEJO
+	// >>>FASE 2 - DIBUJAR EL REFLEJO
 	// =============================================================
 	// Ahora le decimos: "Solo dibuja donde el stencil sea igual a 1"
 	glStencilFunc(GL_EQUAL, 1, 1);
 	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP); // No modifiques el stencil, solo léelo
 
 	glPushMatrix();
-	// 1. Efecto Espejo: Escalar Y por -1 (respecto al nivel del piso)
-	// Como el piso está en Y=-2, primero movemos el mundo para que el piso sea el eje 0,
-	// escalamos, y regresamos. O usamos un truco matemático:
-	// Escalado simple en -1 invierte sobre Y=0. Nuestro piso es Y=-2.
-	// Distancia del objeto al piso = (y_obj - (-2)).
-	// Reflejo = -2 - (y_obj + 2).
-	// Transformación: Translate(0, -2, 0) -> Scale(1,-1,1) -> Translate(0, 2, 0) ??
-	// Simplificación visual: Reflejo respecto al plano Y=-2.
+		// 1. Efecto Espejo: Escalar Y por -1 (respecto al nivel del piso)
+		// Como el piso está en Y=-2, primero movemos el mundo para que el piso sea el eje 0,
+		// escalamos, y regresamos. O usamos un truco matemático:
+		// Escalado simple en -1 invierte sobre Y=0. Nuestro piso es Y=-2.
+		// Distancia del objeto al piso = (y_obj - (-2)).
+		// Reflejo = -2 - (y_obj + 2).
+		// Transformación: Translate(0, -2, 0) -> Scale(1,-1,1) -> Translate(0, 2, 0) ??
+		// Simplificación visual: Reflejo respecto al plano Y=-2.
 
-	// TRUCO DE REFLEJO EN PLANO ARBITRARIO (Y = -2):
-	glTranslatef(0.0f, -2.0f, 0.0f); // Mover pivote al piso
-	glScalef(1.0f, -1.0f, 1.0f);     // Invertir Y
-	glTranslatef(0.0f, 2.0f, 0.0f);  // Regresar pivote (inverso de bajar es subir, pero en mundo invertido...)
-	// Nota: La traslación inversa dentro de una escala negativa es confusa.
-	// Mejor lógica: Mover al origen del espejo -> Escalar -> Mover de regreso.
+		// TRUCO DE REFLEJO EN PLANO ARBITRARIO (Y = -2):
+		glTranslatef(0.0f, -2.0f, 0.0f); // Mover pivote al piso
+		glScalef(1.0f, -1.0f, 1.0f);     // Invertir Y
+		glTranslatef(0.0f, 2.0f, 0.0f);  // Regresar pivote (inverso de bajar es subir, pero en mundo invertido...)
+		// Nota: La traslación inversa dentro de una escala negativa es confusa.
+		// Mejor lógica: Mover al origen del espejo -> Escalar -> Mover de regreso.
 
-	// >>> CORRECCIÓN CRÍTICA DE Winding Order
-	// Al escalar por -1, los polígonos se voltean. Si CULL_FACE está activo,
-	// el reflejo desaparecería. Invertimos la definición de "Frente".
-	glFrontFace(GL_CW);
+		// >>> CORRECCIÓN CRÍTICA DE Winding Order
+		// Al escalar por -1, los polígonos se voltean. Si CULL_FACE está activo,
+		// el reflejo desaparecería. Invertimos la definición de "Frente".
+		glFrontFace(GL_CW);
 
-	// Dibujar el objeto reflejado
-	DibujarCuboEnPosicion();
+		// Dibujar el objeto reflejado
+		DibujarCuboEnPosicion();
 
-	// Restaurar orden normal
-	glFrontFace(GL_CCW);
+		// Restaurar orden normal
+		glFrontFace(GL_CCW);
 	glPopMatrix();
 
 	// Apagamos Stencil para dibujar el resto del mundo normal
 	glDisable(GL_STENCIL_TEST);
 
 	// =============================================================
-	// >>> GEMA 1: FASE 3 - DIBUJAR EL PISO (BLENDING)
+	// >>> DIBUJAR EL PISO que en este aparenta ser agua (BLENDING)
 	// =============================================================
 	// Dibujamos el piso real, pero con transparencia para ver el reflejo debajo
 	glEnable(GL_BLEND);
@@ -653,7 +653,7 @@ void display(void) {
 	glDisable(GL_BLEND);
 
 	// =============================================================
-	// >>> GEMA 1: FASE 4 - SOMBRAS Y OBJETOS REALES (Tu código original)
+	// >>> FASE 4 - SOMBRAS Y OBJETOS REALES (Tu código original)
 	// =============================================================
 
 	// SOMBRA
@@ -662,6 +662,10 @@ void display(void) {
 
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_LIGHTING);
+
+	// >>> GEMA 1: VOLVEMOS A ACTIVAR BLENDING PARA LA SOMBRA
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	glPushMatrix();
 	GLfloat sombraMat[16];
@@ -673,10 +677,11 @@ void display(void) {
 	glScalef(escalaCubo, escalaCubo, escalaCubo);
 
 	if (bWireframe) glColor3f(1.0f, 1.0f, 1.0f);
-	else glColor3f(0.0f, 0.0f, 0.0f);
+	else glColor4f(0.0f, 0.0f, 0.0f,0.4f);
 
 	colorcube_sin_color();
 	glPopMatrix();
+		glDisable(GL_BLEND); // Limpieza final de blending
 
 	if (profundidadEstabaActiva) glEnable(GL_DEPTH_TEST);
 	if (luzEstabaActiva) glEnable(GL_LIGHTING);
@@ -685,12 +690,12 @@ void display(void) {
 	// Dibujamos el cubo real (encima del piso y la sombra)
 	if (bMostrarEsfera) {
 		glPushMatrix();
-		glRotatef(theta[0], 1.0, 0.0, 0.0);
-		glRotatef(theta[1], 0.0, 1.0, 0.0);
-		glDisable(GL_LIGHTING);
-		glColor3f(1.0f, 1.0f, 1.0f);
-		glutWireSphere(1.8f * escalaCubo, 15, 15);
-		if (luzEstabaActiva) glEnable(GL_LIGHTING);
+			glRotatef(theta[0], 1.0, 0.0, 0.0);
+			glRotatef(theta[1], 0.0, 1.0, 0.0);
+			glDisable(GL_LIGHTING);
+			glColor3f(1.0f, 1.0f, 1.0f);
+			glutWireSphere(1.8f * escalaCubo, 15, 15);
+			if (luzEstabaActiva) glEnable(GL_LIGHTING);
 		glPopMatrix();
 	}
 	DibujarCuboEnPosicion();
@@ -703,7 +708,8 @@ void myReshape(int w, int h)
 	glViewport(0, 0, w, h);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluPerspective(60.0f, (GLfloat)w / (GLfloat)h, 1.0f, 100.0f); // Perspectiva real
+	// aumentamos a 300.0f para ver mas grande el piso nuevo
+	gluPerspective(60.0f, (GLfloat)w / (GLfloat)h, 1.0f, 300.0f); // Perspectiva real
 	glMatrixMode(GL_MODELVIEW);
 }
 
